@@ -3,29 +3,26 @@ import numpy as np
 
 class Data():
 
-    def setFilePaths(self,x_path,y_path):
-        self.x_path = x_path
-        self.y_path = y_path
-        print("file paths set")
+    def __init__(self):
+        self.batch_size = 128
 
-    def getSize(self):
-        print("gettting size...")
-        self.size = sum(1 for line in open(self.y_path))
-        print("Size of set: ",self.size)
-        return self.size
+    def setFilePaths(self,data_path):
+        self.data_path = data_path
+        print("Data Path set")
 
     def getRandomData(self,batch_size = None):
-        print("Getting random data")
-        if batch_size is None:
-            self.batch_size = 128
-        else:
+        if not (batch_size is None):
             self.batch_size = batch_size
 
-        rand_index = np.random.choice(self.size-self.batch_size,1,replace = False)
-        print("Indicex Computed")
-        print("Rand index: ",rand_index)
+        rand_index = int(np.random.sample()*(1281166 - self.batch_size))
+        file_numb = int(rand_index//100000)
+        rand_index = rand_index % 100000
+
+        x_fname = self.data_path+"x_train_"+str(file_numb)+".csv"
+        y_fname = self.data_path+"y_train_"+str(file_numb)+".csv"
+
         x_batch = []
-        with open(self.x_path,'r') as fh:
+        with open(x_fname,'r') as fh:
             for _ in range(rand_index):
                 fh.readline()
             for i in range(self.batch_size):
@@ -33,18 +30,16 @@ class Data():
                 row = [int(x) for x in row]
                 x_batch.append(row)
             self.x_batch = np.array(x_batch).astype(int)
-        print("X_batch extracted")
 
         y_batch = []
-        with open(self.y_path,'r') as fh:
-            for item in rand_index:
+        with open(y_fname,'r') as fh:
+            for _ in range(rand_index):
                 fh.readline()
             for i in range(self.batch_size):
                 row = fh.readline().split(',')
                 row = [int(y) for y in row]
                 y_batch.append(row)
             self.y_batch = np.array(y_batch).astype(int)
-        print("y_batch extracted")
 
     def getAllData(self):
         x_data = pd.read_csv(self.x_path,sep = ',',header = None)
@@ -99,26 +94,15 @@ class Data():
         self.x_final_batch = np.array(x_final_batch).astype(int)
 
 
-def main():
-    val_data = Data()
-    val_data.setFilePaths(x_path = "D:/data/x_train.csv",y_path="D:/data/y_train_hot.csv")
-    val_data.getSize()
-    val_data.getRandomData(batch_size = 1)
-    val_data.augmentData()
-    x_batch = val_data.x_final_batch
-    y_batch = val_data.y_final_batch
-    print(np.argmax(y_batch,axis = 1))
-    print(x_batch.shape)
-
-
 batch_size = 128
 epochs = 100
 
 gph = tf.Graph()
 with gph.as_default():
-    x = tf.placeholder('float',shape = [None,24,24,3])
+    x = tf.placeholder('float',shape = [None,3,24,24])
     y_ = tf.placeholder('float',shape = [None,1000])
 
+    x_reshaped = tf.transpose(x,perm = [0,2,3,1])
     ls_ker_dims = [[3,3,3,96],
                    [3,3,96,256],
                    [3,3,256,384],
@@ -129,12 +113,12 @@ with gph.as_default():
                    [4096,1000]]
     # initializing all kernels and biases including fc layer
     kernels = [0]*8
-    biases = []*8
+    biases = [0]*8
     for i in range(8):
         kernels[i] = tf.Variable(tf.random_normal(shape = ls_ker_dims[i],mean = 0.0, stddev=0.01))
-        biases[i] = tf.Variable(1.0,shape = ls_ker_dims[i][-1])
+        biases[i] = tf.Variable(tf.constant(1.0,shape = [ls_ker_dims[i][-1]]))
 
-    amap = tf.nn.relu(tf.nn.conv2d(x,kernels[0],strides = [1,1,1,1],padding = 'VALID'))
+    amap = tf.nn.relu(tf.nn.conv2d(x_reshaped,kernels[0],strides = [1,1,1,1],padding = 'VALID'))
     layer1 = tf.nn.max_pool(amap,[1,3,3,1],[1,1,1,1],padding = "VALID")
 
     amap = tf.nn.relu(tf.nn.conv2d(layer1,kernels[1],[1,1,1,1],padding = "VALID"))
@@ -144,11 +128,11 @@ with gph.as_default():
     layer4 = tf.nn.relu(tf.nn.conv2d(layer3,kernels[3],[1,1,1,1],'VALID'))
     layer5 = tf.nn.relu(tf.nn.conv2d(layer4,kernels[4],[1,1,1,1],'VALID'))
 
-    out_dims = [batch_size,10,10,256]
-    layer5_flat = tf.reshape(layer5,shape = [batch_size,out_dims[1]*out_dims[2]*out_dims[3]])
+    out_dims = [batch_size*10,10,10,256]
+    layer5_flat = tf.reshape(layer5,shape = [out_dims[0],out_dims[1]*out_dims[2]*out_dims[3]])
 
-    layer6 = tf.relu(tf.matmul(layer5_flat,kernels[5]) + biases[5])
-    layer7 = tf.relu(tf.matmul(layer6, kernels[6]) + biases[6])
+    layer6 = tf.nn.relu(tf.matmul(layer5_flat,kernels[5]) + biases[5])
+    layer7 = tf.nn.relu(tf.matmul(layer6, kernels[6]) + biases[6])
     layer8 = tf.matmul(layer7, kernels[7]) + biases[7]
 
     soft_max = tf.nn.softmax(layer8)
@@ -156,9 +140,16 @@ with gph.as_default():
     opt = tf.train.AdamOptimizer()
     train = opt.minimize(loss)
 
-with tf.Session(gph) as sess:
+with tf.Session(graph = gph) as sess:
     sess.run(tf.global_variables_initializer())
     train_data = Data()
-    train_data.setFilePaths("D:/data/x_train.csv","D:/data/y_train_hot.csv")
+    train_data.setFilePaths("D:/data/training/")
 
-
+    for i in range(100):
+        train_data.getRandomData(batch_size)
+        train_data.augmentData()
+        x_batch = train_data.x_final_batch
+        y_batch = train_data.y_final_batch
+        dict = {x: x_batch,y_:y_batch}
+        _,cost = sess.run([train,loss],dict)
+        print("Epoch: ",i,"\tCost: ",cost)
