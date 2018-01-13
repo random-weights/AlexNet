@@ -21,17 +21,14 @@ class Data():
         else:
             self.batch_size = batch_size
 
-        rand_indices = np.random.choice(self.size,self.batch_size,replace = False)
-        rand_indices = sorted(rand_indices)
-        print("Indices Computed")
-        print("Rand indices: ",rand_indices)
+        rand_index = np.random.choice(self.size-self.batch_size,1,replace = False)
+        print("Indicex Computed")
+        print("Rand index: ",rand_index)
         x_batch = []
         with open(self.x_path,'r') as fh:
-            ptr = 0
-            for item in rand_indices:
-                for i in range(item-ptr):
-                    fh.readline()
-                    ptr += 1
+            for _ in range(rand_index):
+                fh.readline()
+            for i in range(self.batch_size):
                 row = fh.readline().split(',')
                 row = [int(x) for x in row]
                 x_batch.append(row)
@@ -40,11 +37,9 @@ class Data():
 
         y_batch = []
         with open(self.y_path,'r') as fh:
-            ptr = 0
-            for item in rand_indices:
-                for i in range(item-ptr):
-                    fh.readline()
-                    ptr += 1
+            for item in rand_index:
+                fh.readline()
+            for i in range(self.batch_size):
                 row = fh.readline().split(',')
                 row = [int(y) for y in row]
                 y_batch.append(row)
