@@ -95,12 +95,12 @@ with gph.as_default():
     out_dims = [batch_size,10,10,256]
     layer5_flat = tf.reshape(layer5,shape = [batch_size,out_dims[1]*out_dims[2]*out_dims[3]])
 
-    layer1 = tf.relu(tf.matmul(layer5_flat,kernels[5]) + biases[5])
-    layer2 = tf.relu(tf.matmul(layer1, kernels[6]) + biases[6])
-    layer3 = tf.matmul(layer2, kernels[7]) + biases[7]
+    layer6 = tf.relu(tf.matmul(layer5_flat,kernels[5]) + biases[5])
+    layer7 = tf.relu(tf.matmul(layer6, kernels[6]) + biases[6])
+    layer8 = tf.matmul(layer7, kernels[7]) + biases[7]
 
-    soft_max = tf.nn.softmax(layer3)
-
+    soft_max = tf.nn.softmax(layer8)
+    
 
 with tf.Session(gph) as sess:
     sess.run(tf.global_variables_initializer())
