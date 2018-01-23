@@ -109,7 +109,7 @@ with gph.as_default():
     ls_kern_count = [96,256,384,384,256]
 
     #initializer for kernels and biases
-    kern_init = tf.random_normal(mean = 0.0,stddev=0.01)
+    kern_init = tf.random_normal_initializer(mean = 0.0,stddev=0.01)
     bias_init = tf.zeros_initializer()
 
     conv1 = tf.layers.conv2d(x_reshaped,filters = ls_kern_count[0],
