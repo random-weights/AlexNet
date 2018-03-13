@@ -99,57 +99,93 @@ epochs = 100
 
 gph = tf.Graph()
 with gph.as_default():
-    x = tf.placeholder('float',shape = [None,3,24,24])
-    y_ = tf.placeholder('float',shape = [None,1000])
+    with tf.variable_scope("inputs"):
+        x = tf.placeholder('float',shape = [None,3,24,24],name = "input_img")
+        y_true = tf.placeholder('float',shape = [None,1000], name = "true_cls")
 
-    x_reshaped = tf.transpose(x,perm = [0,2,3,1])
-    ls_ker_dims = [[3,3,3,96],
-                   [3,3,96,256],
-                   [3,3,256,384],
-                   [3,3,384,384],
-                   [3,3,384,256],
-                   [10*10*256,4096],
-                   [4096,4096],
-                   [4096,1000]]
-    # initializing all kernels and biases including fc layer
-    kernels = [0]*8
-    biases = [0]*8
-    for i in range(8):
-        kernels[i] = tf.Variable(tf.random_normal(shape = ls_ker_dims[i],mean = 0.0, stddev=0.01))
-        biases[i] = tf.Variable(tf.constant(1.0,shape = [ls_ker_dims[i][-1]]))
+    y_true_cls = tf.argmax(y_true,axis = 1)
+    x_reshaped = tf.transpose(x,perm = [0,2,3,1],name = "input_img_reshaped")
 
-    amap = tf.nn.relu(tf.nn.conv2d(x_reshaped,kernels[0],strides = [1,1,1,1],padding = 'VALID'))
-    layer1 = tf.nn.max_pool(amap,[1,3,3,1],[1,1,1,1],padding = "VALID")
+    kern_size = [3,3]
+    ls_kern_count = [96,256,384,384,256]
 
-    amap = tf.nn.relu(tf.nn.conv2d(layer1,kernels[1],[1,1,1,1],padding = "VALID"))
-    layer2 = tf.nn.max_pool(amap,[1,3,3,1],[1,1,1,1],'VALID')
+    #initializer for kernels and biases
+    kern_init = tf.random_normal_initializer(mean = 0.0,stddev=0.01)
+    bias_init = tf.zeros_initializer()
+    with tf.variable_scope("layer1"):
+        conv1 = tf.layers.conv2d(x_reshaped,filters = ls_kern_count[0],
+                                 kern_size = kern_size, strides = [1,1],padding = "valid",
+                                 activation = tf.nn.relu,use_bias = True,
+                                 kernel_initializer=kern_init,
+                                 bias_initializer=bias_init,
+                                 trainable=True,name = "conv1")
+        pool1 = tf.layers.max_pooling2d(conv1,kern_size,[1,1],padding="valid",name = "pool1")
 
-    layer3 = tf.nn.relu(tf.nn.conv2d(layer2,kernels[2],[1,1,1,1],'VALID'))
-    layer4 = tf.nn.relu(tf.nn.conv2d(layer3,kernels[3],[1,1,1,1],'VALID'))
-    layer5 = tf.nn.relu(tf.nn.conv2d(layer4,kernels[4],[1,1,1,1],'VALID'))
+    with tf.variable_scope("layer2"):
+        conv2 = tf.layers.conv2d(pool1,filters = ls_kern_count[1],
+                                 kern_size = kern_size, strides = [1,1],padding = "valid",
+                                 activation = tf.nn.relu,use_bias = True,
+                                 kernel_initializer=kern_init,
+                                 bias_initializer=bias_init,
+                                 trainable=True,name = "conv2")
+        pool2 = tf.layers.max_pooling2d(conv2,kern_size,[1,1],padding="valid",name = "pool2")
 
-    out_dims = [batch_size*10,10,10,256]
-    layer5_flat = tf.reshape(layer5,shape = [out_dims[0],out_dims[1]*out_dims[2]*out_dims[3]])
+    with tf.variable_scope("layer3"):
+        conv3 = tf.layers.conv2d(pool2,filters = ls_kern_count[2],
+                                 kern_size = kern_size, strides = [1,1],padding = "valid",
+                                 activation = tf.nn.relu,use_bias = True,
+                                 kernel_initializer=kern_init,
+                                 bias_initializer=bias_init,
+                                 trainable=True,name = "conv3")
 
-    layer6 = tf.nn.relu(tf.matmul(layer5_flat,kernels[5]) + biases[5])
-    layer7 = tf.nn.relu(tf.matmul(layer6, kernels[6]) + biases[6])
-    layer8 = tf.matmul(layer7, kernels[7]) + biases[7]
+    with tf.variable_scope("layer4"):
+        conv4 = tf.layers.conv2d(conv3, filters=ls_kern_count[3],
+                                 kern_size=kern_size, strides=[1, 1], padding="valid",
+                                 activation=tf.nn.relu, use_bias=True,
+                                 kernel_initializer=kern_init,
+                                 bias_initializer=bias_init,
+                                 trainable=True, name="conv4")
 
-    soft_max = tf.nn.softmax(layer8)
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = layer8,labels = y_))
-    opt = tf.train.AdamOptimizer()
-    train = opt.minimize(loss)
+    with tf.variable_scope("layer5"):
+        conv5 = tf.layers.conv2d(conv4, filters=ls_kern_count[4],
+                                 kern_size=kern_size, strides=[1, 1], padding="valid",
+                                 activation=tf.nn.relu, use_bias=True,
+                                 kernel_initializer=kern_init,
+                                 bias_initializer=bias_init,
+                                 trainable=True, name="conv5")
+
+    flat_tensor = tf.layers.flatten(conv5,name = "flat_tensor")
+
+    #fully connected layer
+    with tf.variable_scope("fully_connected_layer"):
+        ls_units = [4096,4096,1000]
+        fc1 = tf.layers.dense(flat_tensor,units = ls_units[0],activation = tf.nn.relu,
+                              use_bias = True,kernel_initializer=kern_init,
+                              bias_initializer=bias_init,trainable=True,name = "fc1")
+        fc2 = tf.layers.dense(fc1, units=ls_units[1], activation=tf.nn.relu,
+                              use_bias=True, kernel_initializer=kern_init,
+                              bias_initializer=bias_init, trainable=True, name="fc1")
+        logits = tf.layers.dense(fc2,units = ls_units[2],activation=None,use_bias = True,
+                                 kernel_initializer=kern_init, bias_initializer=bias_init,
+                                 trainable=True,name = "logits")
+
+        y_pred = tf.nn.softmax(logits)
+        y_pred_cls = tf.argmax(y_pred,axis = 1)
+
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = logits,labels = y_true),name = "loss")
+    opt = tf.train.AdamOptimizer(1e-1)
+    train = opt.minimize(loss,name = "optimizer")
 
 with tf.Session(graph = gph) as sess:
     sess.run(tf.global_variables_initializer())
     train_data = Data()
     train_data.setFilePaths("D:/data/training/")
 
-    for i in range(100):
+    for i in range(epochs):
         train_data.getRandomData(batch_size)
         train_data.augmentData()
         x_batch = train_data.x_final_batch
         y_batch = train_data.y_final_batch
-        dict = {x: x_batch,y_:y_batch}
+        dict = {x: x_batch,y_true:y_batch}
         _,cost = sess.run([train,loss],dict)
         print("Epoch: ",i,"\tCost: ",cost)
